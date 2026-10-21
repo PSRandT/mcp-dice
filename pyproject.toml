@@ -4,7 +4,12 @@ version = "0.1.2"
 description = "MCP server enabling LLMs to roll dice"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["mcp>=1.0.0", "python-dotenv>=1.0.1"]
+dependencies = [
+    "mcp>=1.30,<2",
+    "python-dotenv>=1.0.1",
+    "starlette>=0.41,<1",
+    "uvicorn>=0.32,<1",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/YourUsername/mcp-dice"
@@ -24,9 +29,10 @@ dev = ["pytest>=8.3.3"]
 
 [project.scripts]
 mcp-dice = "mcp_dice:main"
+mcp-dice-http = "mcp_dice.http_server:main"
 
 [tool.pytest.ini_options]
-pythonpath = "src"
+pythonpath = ["src", "."]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_dice"]

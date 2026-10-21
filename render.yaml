@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: mcp-dice
+    runtime: python
+    plan: free
+    buildCommand: pip install uv==0.12.23 && uv sync --frozen
+    startCommand: uv run --frozen mcp-dice-http
+    healthCheckPath: /health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PYTHON_VERSION
+        value: 3.11.11

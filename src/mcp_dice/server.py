@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Tuple
 
 from mcp.server import Server
-from mcp.types import Resource, Tool, TextContent, ImageContent, EmbeddedResource
+from mcp.types import Resource, Tool, ToolAnnotations, TextContent, ImageContent, EmbeddedResource
 from pydantic import AnyUrl
 
 # Configure logging
@@ -16,6 +16,19 @@ logger = logging.getLogger("mcp-dice")
 
 # Default dice configuration
 DEFAULT_ROLL = "2d6"
+MAX_DICE = 100
+MAX_SIDES = 1_000_000
+MAX_MODIFIER = 1_000_000
+MAX_NOTATION_LENGTH = 64
+
+
+def validate_dice(n_dice: int, n_sides: int, modifier: int) -> None:
+    if not 1 <= n_dice <= MAX_DICE:
+        raise ValueError(f"Number of dice must be between 1 and {MAX_DICE}")
+    if not 2 <= n_sides <= MAX_SIDES:
+        raise ValueError(f"Number of sides must be between 2 and {MAX_SIDES}")
+    if abs(modifier) > MAX_MODIFIER:
+        raise ValueError(f"Modifier must be between {-MAX_MODIFIER} and {MAX_MODIFIER}")
 
 
 def parse_dice_notation(notation: str) -> Tuple[int, int, int]:
@@ -28,9 +41,13 @@ def parse_dice_notation(notation: str) -> Tuple[int, int, int]:
     Returns:
         Tuple of (number of dice, number of sides, modifier)
     """
+    if not isinstance(notation, str):
+        raise ValueError("Dice notation must be a string")
+    if len(notation) > MAX_NOTATION_LENGTH:
+        raise ValueError(f"Dice notation must be at most {MAX_NOTATION_LENGTH} characters")
     # Updated pattern to support optional modifier
     pattern = re.compile(r"^(\d+)d(\d+)(?:([+-]\d+))?$")
-    match = pattern.match(notation)
+    match = pattern.fullmatch(notation)
 
     if not match:
         raise ValueError(f"Invalid dice notation: {notation}")
@@ -40,6 +57,7 @@ def parse_dice_notation(notation: str) -> Tuple[int, int, int]:
     modifier_str = match.group(3)
     modifier = int(modifier_str) if modifier_str else 0
 
+    validate_dice(n_dice, n_sides, modifier)
     return n_dice, n_sides, modifier
 
 
@@ -55,10 +73,7 @@ def roll_dice(n_dice: int, n_sides: int, modifier: int = 0) -> dict[str, Any]:
     Returns:
         Dictionary containing roll results and metadata
     """
-    if n_dice < 1:
-        raise ValueError("Number of dice must be positive")
-    if n_sides < 2:
-        raise ValueError("Number of sides must be at least 2")
+    validate_dice(n_dice, n_sides, modifier)
 
     rolls = [random.randint(1, n_sides) for _ in range(n_dice)]
     roll_sum = sum(rolls)
@@ -122,7 +137,15 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="roll_dice",
-            description="Roll dice using standard notation (e.g., '2d6+3', '1d20-2')",
+            description=(
+                "Roll dice using standard notation (e.g., '2d6+3', '1d20-2'). "
+                "Returns individual rolls, sum, modifier, total, notation and timestamp. "
+                "Limits: 1-100 dice, 2-1000000 sides, modifier -1000000 to 1000000. "
+                "Does not interpret game rules or success/failure."
+            ),
+            annotations=ToolAnnotations(
+                readOnlyHint=True, destructiveHint=False, openWorldHint=False
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -130,6 +153,7 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Dice notation (e.g., '2d6+3', '1d20-2')",
                         "pattern": r"^\d+d\d+([+-]\d+)?$",
+                        "maxLength": MAX_NOTATION_LENGTH,
                     }
                 },
                 "required": ["notation"],
